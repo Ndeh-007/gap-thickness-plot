@@ -1,0 +1,12 @@
+2.000000000000000000e+02
+2.000000000000000000e+01
+4.000000000000000222e-01
+1.000000000000000082e-05
+3.000000000000000000e+01
+
+# lines are respectively
+# nz
+# ntheta
+# CFL (has to be smaller than 1 for convergence.)
+# tolDP (tolerance for frictional pressure calculations)
+# timeout: output data time interval (s)

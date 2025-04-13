@@ -1,0 +1,11 @@
+
+1.23E+003,    1.00E+000, 2.00E-001,  5.0E-01,    0.00E+000
+1.46E+003,    2.00E+000, 3.00E-002,  1.0E+00,    0.00E+000
+
+# columns 1-4 are: 
+# density (kg/m3)
+# yield stress (Pa)
+# consistency (Pa.s^n)
+# power law index (NU)
+# MDR ratio (0 = none, 1 = full) 
+# one row for each fluid

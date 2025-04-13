@@ -9,7 +9,6 @@ def errorhandler(func):
         except Exception as e:
             tb = traceback.format_exc()
             msg = f"{func.__name__}: {str(e)} \n {tb}"
-            signalBus.onError.emit({"text": msg, "type": "error"})
-            print(msg)
-
+            signalBus.onMessage.emit({"text": msg, "type": "error"})
+            traceback.print_exc()
     return wrapper

@@ -2,28 +2,32 @@ from PySide6 import QtWidgets, QtCore, QtGui
 import pyqtgraph.opengl as gl
 import components as comp
 import utils as utils
+import models as models
+import os
 
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Gap Thickness Plotter")
-        self.setGeometry(100, 100, 600, 400)
+        self.setGeometry(100, 100, 1000, 800)
 
-        # define the ui control toolbar actions
-        # clear, add, remove, save, load, export, import
         self.actionClear = QtGui.QAction("Clear", self)
-        self.actionAdd = QtGui.QAction("Add", self)
-        self.actionRemove = QtGui.QAction("Remove", self)
-        self.actionSave = QtGui.QAction("Save", self)
+        self.actionDraw = QtGui.QAction("Draw", self)
+        self.actionStopAnimation = QtGui.QAction("Stop", self)
+        self.actionAnimate = QtGui.QAction("Animate", self)
         self.actionLoad = QtGui.QAction("Load", self)
         self.actionExport = QtGui.QAction("Export", self)
         self.actionImport = QtGui.QAction("Import", self)
+        self.thicknessProfileComboBox = QtWidgets.QComboBox(self)
+        self.slabPointsInput = QtWidgets.QLineEdit(self)
+        self.baseThicknessInput = QtWidgets.QLineEdit(self)
+        self.depthDetailLevelComboBox = QtWidgets.QComboBox(self)
 
         self.actionClear.setData("clear")
-        self.actionAdd.setData("add")
-        self.actionRemove.setData("remove")
-        self.actionSave.setData("save")
+        self.actionDraw.setData("draw")
+        self.actionStopAnimation.setData("stop")
+        self.actionAnimate.setData("animate")
         self.actionLoad.setData("load")
         self.actionExport.setData("export")
         self.actionImport.setData("import")
@@ -45,54 +49,143 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setCentralWidget(centralWidget)
 
         self.__meshItems = {}
+        self.__conf = {
+            "frame_index": None,
+            "thickness_profile": "CW",
+            "z_points": 40,
+            "y_points": 20,
+            "base_thickness": 0.05,
+            "depth_detail_level": 25,
+            "tmd": 0.0,
+            "bmd": 100.0,
+            "images": [],
+        }
+
+        self.timer = QtCore.QTimer(self)
+        self.timer.timeout.connect(self.draw_frame)
+        self.timer.setInterval(200)
+
+        self.manager = utils.ThreadManager()
 
         self.__initialize()
         self.__configure()
         self.__connectSignals()
 
+    @utils.errorhandler
     def __initialize(self):
         # populate the toolbar with actions
         self.controlToolBar.addAction(self.actionLoad)
         self.controlToolBar.addSeparator()
-        self.controlToolBar.addAction(self.actionAdd)
-        self.controlToolBar.addAction(self.actionSave)
+        self.controlToolBar.addAction(self.actionDraw)
+        self.controlToolBar.addAction(self.actionAnimate)
+        self.controlToolBar.addAction(self.actionStopAnimation)
         self.controlToolBar.addSeparator()
         self.controlToolBar.addAction(self.actionClear)
-        self.controlToolBar.addAction(self.actionRemove)
         self.controlToolBar.addSeparator()
         self.controlToolBar.addAction(self.actionImport)
         self.controlToolBar.addAction(self.actionExport)
+        self.controlToolBar.addSeparator()
+
+        s1 = QtWidgets.QWidget()
+        s2 = QtWidgets.QWidget()
+        s1.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
+        s2.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
+        self.controlToolBar.addWidget(s1)
+        self.controlToolBar.addWidget(QtWidgets.QLabel("Thickness Profile: "))
+        self.controlToolBar.addWidget(self.thicknessProfileComboBox)
+        self.controlToolBar.addSeparator()
+        self.controlToolBar.addWidget(QtWidgets.QLabel("nz points: "))
+        self.controlToolBar.addWidget(self.slabPointsInput)
+        self.controlToolBar.addSeparator()
+        self.controlToolBar.addWidget(QtWidgets.QLabel("Base Thickness: "))
+        self.controlToolBar.addWidget(self.baseThicknessInput)
+        self.controlToolBar.addWidget(s2)
+        self.controlToolBar.addWidget(QtWidgets.QLabel("Depth Detail Level: "))
+        self.controlToolBar.addWidget(self.depthDetailLevelComboBox)
+
+        # populate the thickness profile combobox
+        self.slabPointsInput.setPlaceholderText("number of points")
+        self.slabPointsInput.setText(str(self.__conf["z_points"]))
+        self.baseThicknessInput.setText(str(self.__conf["base_thickness"]))
+        self.baseThicknessInput.setPlaceholderText("base thickness")
+        for k, opts in utils.THICKNESS_PROFILES.items():
+            self.thicknessProfileComboBox.addItem(opts["name"], k)
+        self.thicknessProfileComboBox.setCurrentIndex(0)
+
+        # populate the depth detail level combobox
+        for level in utils.DEPTH_DETAIL_LEVELS:
+            self.depthDetailLevelComboBox.addItem(level["name"], level["value"])
+        self.depthDetailLevelComboBox.setCurrentIndex(1)
 
         # make console only read only
         self.console.setReadOnly(True)
 
-        # create a grid item
-        grid_item = gl.GLGridItem()
-        grid_item.setColor(utils.appColors.medium_rbg)
-        self.glView.addItem(grid_item)
-
-        # add an axis item
-        axis_item = gl.GLAxisItem()
-        self.glView.addItem(axis_item)
-
+    @utils.errorhandler
     def __configure(self):
         self.controlToolBar.actionTriggered.connect(self.__onToolBarActionTriggered)
         self.controlToolBar.setMovable(False)
 
+        self.slabPointsInput.textChanged.connect(self.__onOptionsChanged)
+        self.baseThicknessInput.textChanged.connect(self.__onOptionsChanged)
+        self.thicknessProfileComboBox.currentIndexChanged.connect(
+            self.__onOptionsChanged
+        )
+        self.depthDetailLevelComboBox.currentIndexChanged.connect(
+            self.__onOptionsChanged
+        )
+
+    @utils.errorhandler
     def __connectSignals(self):
-        utils.signalBus.onError.connect(self.log)
+        utils.signalBus.onMessage.connect(self.log)
 
     # region event handlers
+    @utils.errorhandler
+    def prime(self):
+        self.logEvent("Initialization complete. Drawing the initial mesh item.")
+        self.__load()
+
+    @utils.errorhandler
+    def __onOptionsChanged(self, _=None):
+        # update the configuration based on the user input
+        self.__conf["thickness_profile"] = self.thicknessProfileComboBox.currentData()
+        self.__conf["depth_detail_level"] = self.depthDetailLevelComboBox.currentData()
+
+        # collect the nz points
+        try:
+            self.__conf["z_points"] = int(self.slabPointsInput.text())
+        except ValueError:
+            self.logWarning("Invalid number of points.")
+            self.__conf["z_points"] = 40
+            self.slabPointsInput.setText(str(self.__conf["z_points"]))
+
+        # collect the base thickness
+        try:
+            self.__conf["base_thickness"] = float(self.baseThicknessInput.text())
+        except ValueError:
+            self.logWarning("Invalid base thickness.")
+            self.__conf["base_thickness"] = 0.05
+            self.baseThicknessInput.setText(str(self.__conf["base_thickness"]))
+
+        self.logEvent(f"Updated configuration: {self.__conf}")
+
+        # draw the mesh item based on the new configuration
+        self.__reDrawScene()
+
+    @utils.errorhandler
     def __onToolBarActionTriggered(self, action: QtGui.QAction):
         action_type = action.data()
         if action_type == "clear":
             self.__clear()
-        elif action_type == "add":
-            self.__add()
-        elif action_type == "remove":
-            self.__remove()
-        elif action_type == "save":
-            self.__save()
+        elif action_type == "draw":
+            self.__draw()
+        elif action_type == "stop":
+            self.__stopAnimation()
+        elif action_type == "animate":
+            self.__animate()
         elif action_type == "load":
             self.__load()
         elif action_type == "export":
@@ -105,40 +198,200 @@ class MainWindow(QtWidgets.QMainWindow):
     # endregion
 
     # region action workers
+    @utils.errorhandler
+    def __stopAnimation(self):
+        # from the loaded images,
+        # construct the base meshdata frame objects with the various colors
 
-    def __clear(self):
-        for item in self.__meshItems.values():
-            self.glView.removeItem(item)
+        self.timer.stop()
+        self.__conf['frame_index'] = 0
 
-    def __add(self):
-        pass
+    @utils.errorhandler
+    def __animate(self):
+        frames = self.__conf["images"]
+        if len(frames) == 0:
+            self.logWarning("No images to animate.")
+            return
+        self.logEvent("Animating images...")
 
-    def __remove(self):
-        pass
+        self.__conf["frame_index"] = 0
+        self.timer.start()
 
-    def __save(self):
-        pass
+    def draw_frame(self):
+        def task(i: int):
+            self.__updateCell(i)
+            return i
+
+        def on_complete(res):
+            if res['failed']:
+                self.timer.stop()
+                self.__conf['frame_index'] = None
+                self.logError(res['error'])
+            else:
+                cur_index = res["results"]
+                
+                if cur_index + 1 == len(self.__conf["images"]):
+                    return self.__stopAnimation()
+
+                self.__conf['frame_index'] = cur_index + 1
+
+        thread = models.ThreadModel(
+            {
+                "task": task,
+                "params": self.__conf["frame_index"],
+                "on_complete": on_complete,
+            },
+            f"DRAW_FRAME_{self.__conf['frame_index'] + 1}/{len(self.__conf['images'])}",
+        )
+
+        self.manager.launchThread(thread)
 
     @utils.errorhandler
     def __load(self):
-        "create a single mesh item and append ot ui"
-        meshdata = utils.create_slab_mesh()
-        mesh_item = utils.create_mesh_item({"meshdata": meshdata})
+        file_path = os.path.join(os.getcwd(), "data", "csave.npy")
 
-        self.glView.addItem(mesh_item)
+        def task(file: str):
 
-        self.__meshItems[f"mesh_item_{len(self.__meshItems)}"] = mesh_item
+            _res_task = utils.load_frames(file)
 
+            profile = utils.THICKNESS_PROFILES[self.__conf["thickness_profile"]][
+                "equation"
+            ](_res_task["nxi"], self.__conf["base_thickness"])
+
+            props = {
+                "thickness_profile": profile,
+                "y_points": _res_task["nzeta"],
+                "z_points": _res_task["nxi"],
+                "tmd": _res_task["tmd"],
+                "bmd": _res_task["bmd"],
+                "text_positions": utils.create_depth_vertex_array(
+                    {
+                        "thickness_profile": profile,
+                        "plane": "zy",
+                        "size": 1,
+                        "anchor": "center",
+                    }
+                ),
+                "detail_level": self.__conf["depth_detail_level"] / 100,
+                "text_color": utils.appColors.light_rbg,
+                "images": _res_task["images"],
+            }
+
+            _res_task["meshdata"] = utils.create_slab_mesh(props)["meshdata"]
+            mesh_item = utils.create_mesh_item(
+                {
+                    "meshdata": _res_task["meshdata"][0],
+                    "color": utils.appColors.medium_tint_rbg,
+                }
+            )
+            text_items = utils.create_text_items(props)
+
+            # collect the items
+            _res_task["depth_labels"] = text_items
+            _res_task["cell"] = mesh_item
+
+            # resolve task
+            return _res_task
+
+        def on_complete(_res_dict):
+            if _res_dict["failed"]:
+                self.logError(_res_dict["error"])
+            else:
+                opts = _res_dict["results"]
+                self.__conf["images"] = opts["images"]
+                self.__conf["y_points"] = opts["nzeta"]
+                self.__conf["z_points"] = opts["nxi"]
+                self.__conf["tmd"] = opts["tmd"]
+                self.__conf["bmd"] = opts["bmd"]
+                self.__conf["unit"] = opts["unit"]
+                self.__conf["meshdata"] = opts["meshdata"]
+                self.__meshItems["depth_labels"] = opts["depth_labels"]
+                self.__meshItems["cell"] = opts["cell"]
+
+                self.__draw()
+
+                self.logEvent(f"Loaded {opts['time_step']} images from {file_path}.")
+
+        thread = models.ThreadModel(
+            {
+                "params": file_path,
+                "on_complete": on_complete,
+                "task": task,
+            },
+            id="LOAD_DATA",
+        )
+        self.manager.launchThread(thread)
+
+    @utils.errorhandler
     def __export(self):
         pass
 
+    @utils.errorhandler
     def __import(self):
         pass
 
     # endregion
 
-    # region workers
+    # region scene workers
+    @utils.errorhandler
+    def __reDrawScene(self):
+        # clear the scene
+        self.__clear()
 
+        # create a new mesh item based on configuration and draw
+        self.__draw()
+
+        ## log the event
+        self.logEvent("Redrawn the scene.")
+
+    @utils.errorhandler
+    def __draw(self, _=None):
+        "create a single mesh item and append to ui"
+        # add the them to view
+        if "depth_labels" not in self.__meshItems.keys():
+            self.logError("Cannot draw depth labels, missing key <depth_labels>")
+        else:
+            for item in self.__meshItems["depth_labels"]:
+                self.glView.addItem(item)
+
+        if "cell" not in self.__meshItems.keys():
+            self.logError("Cannot draw mesh, missing key <cell>")
+        else:
+            self.glView.addItem(self.__meshItems["cell"])
+
+    @utils.errorhandler
+    def __updateCell(self, frame_index: int):
+        if frame_index < len(self.__conf["meshdata"]):
+            cell: gl.GLMeshItem = self.__meshItems["cell"]
+            cell.setMeshData(meshdata=self.__conf["meshdata"][frame_index])
+
+    @utils.errorhandler
+    def __clear(self):
+
+        # first clear the scene
+        self.glView.clear()
+
+        # add the axis item
+        axis_item = gl.GLAxisItem()
+        self.glView.addItem(axis_item)
+
+        # add the coordinates as text items
+        for axis in utils.AXIS_LABELS.values():
+            text_item = gl.GLTextItem(
+                text=axis["label"], color=QtGui.QColor(axis["color"]), pos=axis["pos"]
+            )
+            self.glView.addItem(text_item)
+
+        # delete all mesh items
+        self.__meshItems.clear()
+
+        self.logEvent("Cleared all mesh items.")
+
+    # endregion
+
+    # region log workers
+
+    @utils.errorhandler
     def __log(self, msg: str, color: str = utils.appColors.dark_rbg):
         self.console.moveCursor(QtGui.QTextCursor.MoveOperation.End)
 
@@ -154,6 +407,7 @@ class MainWindow(QtWidgets.QMainWindow):
         sb = self.console.verticalScrollBar()
         sb.setValue(sb.maximum())
 
+    @utils.errorhandler
     def log(self, data: str | dict):
         prefix = "[MSG] "
         if isinstance(data, str):
@@ -177,17 +431,36 @@ class MainWindow(QtWidgets.QMainWindow):
             else:
                 self.__log(prefix + data.get("text"))
 
+    @utils.errorhandler
     def logError(self, msg: str):
-        self.log({"text": msg, "type": utils.appColors.danger_rbg})
+        self.log({"text": msg, "type": "error"})
 
+    @utils.errorhandler
     def logEvent(self, msg: str):
-        self.log({"text": msg, "type": utils.appColors.tertiary_rbg})
+        self.log({"text": msg, "type": "event"})
 
+    @utils.errorhandler
     def logWarning(self, msg: str):
-        self.log({"text": msg, "type": utils.appColors.warning_rbg})
+        self.log({"text": msg, "type": "warning"})
+
+    @utils.errorhandler
+    def logSuccess(self, msg: str):
+        self.log({"text": msg, "type": "success"})
 
     # endregion
 
-    # region decorators
+    # region thread workers
+
+    @utils.errorhandler
+    def __onThreadStarted(self, state):
+        pass
+
+    @utils.errorhandler
+    def __onThreadFinished(self):
+        pass
+
+    @utils.errorhandler
+    def __onThreadFailed(self, error):
+        pass
 
     # endregion

@@ -1,6 +1,7 @@
 import pyqtgraph.opengl as gl
 from pyqtgraph import Vector
 from PySide6.QtCore import Qt
+from utils import appColors
 
 
 class VBaseGLViewWidget(gl.GLViewWidget):
@@ -9,7 +10,7 @@ class VBaseGLViewWidget(gl.GLViewWidget):
         self.__panSensitivity = 10
         self.__pan_active = True
         self.last_pos = None
-        self.setBackgroundColor("#ffffff")
+        self.setBackgroundColor(appColors.dark_rbg)
 
     # region setters
     def setPanSensitivity(self, value: int):

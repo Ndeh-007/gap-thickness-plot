@@ -1,0 +1,14 @@
+1
+0.01
+1
+40
+1
+1
+
+# the numbers above related to these options 
+# Line 1) ishade = 1, graphical output is a shaded colourmap for concentrations; ishade = 2, concentrations as cumulative curves
+# Line 2) concentration tolerance at which displacing fluid is signalled
+# Line 3) flow regime method: 0 = base regime purely on local conditions; 1 = adjust regime according to upstream regimes, history of mixing and whether new displacing fluid
+# Line 4) kinertial value. Stratified flows are switched to laminar mixed when |q'(c)| > 1 + kinertial/Fr. Set kinertial = 1000 or larger to probably have no effect 
+# Line 5) DDF = Dunefront diffusivity factor. This will multiply the actual computed diffusivity, i.e. DDF = 10 multiplies physical x 10
+# Line 6) Experimental option for pipe-to-annulus connections, set to 1 for the heavy fluid to fill the bottom of the annulus

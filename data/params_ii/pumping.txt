@@ -1,0 +1,5 @@
+2.340000000000000000e+04,2.777777777777777775e-04,0.000000000000000000e+00,1.000000000000000000e+00,0.000000000000000000e+00,0.000000000000000000e+00,0.000000000000000000e+00
+
+# each line represents flowrate and inflow volume fractions over the past time interval 
+# The first flow rate is valid for t=0 untll the first listed time 
+# time(s)    flowrate(m^3/s)    inflow fluid 1    inflow fluid 2    inflow fluid3 ...

@@ -1,6 +1,7 @@
 import pyqtgraph.opengl as gl
 from PySide6.QtGui import QColor
 
+
 class VMeshItem(gl.GLMeshItem):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
