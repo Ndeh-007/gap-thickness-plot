@@ -53,7 +53,10 @@ def apply_gaussian_filter(
     return f_arr
 
 
-def apply_scaling(arr: np.ndarray, factor: int = 2):
+def apply_scaling(arr: np.ndarray, factor: int = 2, filter_only=False):
+    if filter_only:
+        return apply_gaussian_filter(arr, [1, 1, 0], 2, factor)
+    
     _a = (arr * 255).astype(np.uint8)
     a = scale_with_pillow(_a, 1, factor)
     b = apply_gaussian_filter(a, [1, 1, 0], 2, factor)
@@ -163,7 +166,10 @@ def load_frames(file: str) -> dict:
     annlus_only = 1 == 1
     scale = 1 == 1
 
-    for j in range(time_step - 1):
+    ts = time_step - 1
+    # ts = 1
+
+    for j in range(ts):
         for k in range(n_sections):
             c_vals = data[j, :, k, :, :]
             c, _, n = c_vals.shape
@@ -182,7 +188,7 @@ def load_frames(file: str) -> dict:
                     w_c_vals = np.flip(w_c_vals, axis=1)  # for backwards flow
 
                 if scale:
-                    w_c_vals = apply_scaling(w_c_vals, 2)
+                    w_c_vals = apply_scaling(w_c_vals, 2, filter_only=True)
 
                 n_xi = w_c_vals.shape[0]
                 n_zeta = w_c_vals.shape[1]
@@ -204,7 +210,7 @@ def load_frames(file: str) -> dict:
                         w_c_vals = np.rot90(w_c_vals, k=-1)  # k=-1 => 90° clockwise
 
                     if scale:
-                        w_c_vals = apply_scaling(w_c_vals, 2)
+                        w_c_vals = apply_scaling(w_c_vals, 2, filter_only=True)
 
                     n_xi = w_c_vals.shape[0]
                     n_zeta = w_c_vals.shape[1]

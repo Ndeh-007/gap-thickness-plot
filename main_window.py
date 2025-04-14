@@ -31,6 +31,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.progressBar.setRange(0, 0)
         self.progressBar.setStyleSheet(utils.PROGESS_BAR_STYLE)
         self.slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
+        self.drawFacesCheckbox = QtWidgets.QCheckBox("Faces ")
+        self.drawEdgesCheckbox = QtWidgets.QCheckBox("Edges ")
 
         self.actionClear.setData("clear")
         self.actionDraw.setData("draw")
@@ -70,10 +72,12 @@ class MainWindow(QtWidgets.QMainWindow):
             "bmd": 100.0,
             "images": [],
             "data_file": os.path.join(os.getcwd(), "data", "results", "csave.h5"),
+            "draw_edges": False,
+            "draw_faces": True,
         }
 
         self.timer = QtCore.QTimer(self)
-        self.timer.setInterval(17) # 60 fps
+        self.timer.setInterval(17)  # 60 fps
 
         self.manager = utils.ThreadManager()
 
@@ -122,6 +126,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlToolBar.addWidget(self.dataFileInput)
         self.controlToolBar.addWidget(self.selectBaseFile)
         self.controlToolBar.addWidget(s3)
+        self.controlToolBar.addWidget(self.drawEdgesCheckbox)
+        self.controlToolBar.addWidget(self.drawFacesCheckbox)
         self.controlToolBar.addWidget(QtWidgets.QLabel("Depth Detail Level: "))
         self.controlToolBar.addWidget(self.depthDetailLevelComboBox)
 
@@ -134,7 +140,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.dataFileInput.setPlaceholderText(".h5 file")
         for k, opts in utils.THICKNESS_PROFILES.items():
             self.thicknessProfileComboBox.addItem(opts["name"], k)
-        self.thicknessProfileComboBox.setCurrentIndex(0)
+        self.thicknessProfileComboBox.setCurrentIndex(3)
 
         # populate the depth detail level combobox
         for level in utils.DEPTH_DETAIL_LEVELS:
@@ -150,8 +156,12 @@ class MainWindow(QtWidgets.QMainWindow):
         # process the timer
         self.timer.timeout.connect(self.__updateSlider)
 
+        # populat the checkboxes
+        self.drawEdgesCheckbox.setChecked(self.__conf["draw_edges"])
+        self.drawFacesCheckbox.setChecked(self.__conf["draw_faces"])
+
         # draw and axis item
-        self.__clear() # clear the scene
+        self.__clear()  # clear the scene
 
     @utils.errorhandler
     def __configure(self):
@@ -170,7 +180,8 @@ class MainWindow(QtWidgets.QMainWindow):
         )
 
         self.slider.valueChanged.connect(self.__onSliderValueChanged)
-
+        self.drawFacesCheckbox.checkStateChanged.connect(self.__onSceneOptionsChanged)
+        self.drawEdgesCheckbox.checkStateChanged.connect(self.__onSceneOptionsChanged)
 
     @utils.errorhandler
     def __connectSignals(self):
@@ -184,28 +195,42 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @utils.errorhandler
     def __onSliderValueChanged(self, value: int):
-        
+
         # get the new frame
         if value not in range(len(self.__conf["images"])):
-            self.log(f"Slider value: <{value}> out of bounds <0, {len(self.__conf['images']) - 1}>")
+            self.log(
+                f"Slider value: <{value}> out of bounds <0, {len(self.__conf['images']) - 1}>"
+            )
             return
-        
+
         self.__conf["frame_index"] = value
 
-        # draw 
+        # draw
         self.draw_frame()
 
     @utils.errorhandler
     def __onSelectFile(self, _=None):
 
         #  if filter keys are provided
-        f = QtWidgets.QFileDialog.getOpenFileName(parent=self, filter="HDF5 files (*.h5)")[0]
-       
+        f = QtWidgets.QFileDialog.getOpenFileName(
+            parent=self, filter="HDF5 files (*.h5)"
+        )[0]
+
         # if no file was selected, return nothing
         if len(f) == 0:
             return None
         # set the text
         self.dataFileInput.setText(f.replace("/", "\\"))
+
+    @utils.errorhandler
+    def __onSceneOptionsChanged(self, _=None):
+
+        # collec the check boxes
+        self.__conf["draw_faces"] = self.drawFacesCheckbox.isChecked()
+        self.__conf["draw_edges"] = self.drawEdgesCheckbox.isChecked()
+
+        # redraw the cell
+        self.__reDrawCell()
 
     @utils.errorhandler
     def __onOptionsChanged(self, _=None):
@@ -216,7 +241,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # collect the data file
         h5File = self.dataFileInput.text()
         if Path.is_file(Path(h5File)) and h5File.endswith(".h5"):
-           self.__conf["data_file"] =  h5File
+            self.__conf["data_file"] = h5File
         else:
             self.logError(f"Input File <{h5File}> does not exist or is not a .h5 file")
 
@@ -269,7 +294,7 @@ class MainWindow(QtWidgets.QMainWindow):
         "when timer fires, shift the slider on step forward"
         if self.__conf["frame_index"] is None:
             return
-        
+
         self.slider.setValue(self.__conf["frame_index"] + 1)
 
     @utils.errorhandler
@@ -278,7 +303,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # construct the base meshdata frame objects with the various colors
 
         self.timer.stop()
-        self.__conf['frame_index'] = 0
+        self.__conf["frame_index"] = 0
         self.progressBar.hide()
 
     @utils.errorhandler
@@ -299,22 +324,24 @@ class MainWindow(QtWidgets.QMainWindow):
             return i
 
         def on_complete(res):
-            if res['failed']:
+            if res["failed"]:
                 self.timer.stop()
-                self.__conf['frame_index'] = None
-                self.logError(res['error'])
+                self.__conf["frame_index"] = None
+                self.logError(res["error"])
             else:
                 cur_index = res["results"]
                 if cur_index is None:
                     return
-                
+
                 if cur_index + 1 == len(self.__conf["images"]):
                     return self.__stopAnimation()
 
                 # self.__conf['frame_index'] = cur_index + 1
 
         def on_started():
-            self.logEvent(f"DRAW_FRAME_{self.__conf['frame_index'] + 1}/{len(self.__conf['images'])}")
+            self.logEvent(
+                f"DRAW_FRAME_{self.__conf['frame_index'] + 1}/{len(self.__conf['images'])}"
+            )
 
         thread = models.ThreadModel(
             {
@@ -330,7 +357,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @utils.errorhandler
     def __load(self):
-        file_path = self.__conf['data_file']
+        file_path = self.__conf["data_file"]
 
         def task(file: str):
 
@@ -363,8 +390,10 @@ class MainWindow(QtWidgets.QMainWindow):
             mesh_item = utils.create_mesh_item(
                 {
                     "meshdata": _res_task["meshdata"][0],
-                    "color": utils.appColors.medium_shade_rbg,
+                    "color": utils.appColors.medium_rbg,
                     "rotation": (180, 0, 0, 1, False),
+                    "draw_edges": self.__conf["draw_edges"],
+                    "draw_faces": self.__conf["draw_faces"],
                 }
             )
             text_items = utils.create_text_items(props)
@@ -403,11 +432,11 @@ class MainWindow(QtWidgets.QMainWindow):
 
                 self.logSuccess(f"Loaded {opts['time_step']} images from {file_path}.")
                 self.progressBar.hide()
-        
+
         def on_started():
             self.progressBar.show()
             self.logEvent("Loading data from sources and constructing mesh...")
-        
+
         thread = models.ThreadModel(
             {
                 "params": file_path,
@@ -431,15 +460,26 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # region scene workers
     @utils.errorhandler
-    def __reDrawScene(self):
-        # clear the scene
-        self.__clear()
+    def __reDrawCell(self):
+        # remove the cell
+        # create a new cell with new configurations
+        # append the new mesh item to the view
+        # update the collector
+        # update the frame at index
 
-        # create a new mesh item based on configuration and draw
-        self.__draw()
-
-        ## log the event
-        self.logEvent("Redrawn the scene.")
+        self.glView.removeItem(self.__meshItems["cell"])
+        mesh_item = utils.create_mesh_item(
+            {
+                "empty": True,
+                "color": utils.appColors.medium_shade_rbg,
+                "rotation": (180, 0, 0, 1, False),
+                "draw_edges": self.__conf["draw_edges"],
+                "draw_faces": self.__conf["draw_faces"],
+            }
+        )
+        self.glView.addItem(mesh_item)
+        self.__meshItems["cell"] = mesh_item
+        self.__updateCell(self.__conf["frame_index"])
 
     @utils.errorhandler
     def __draw(self, _=None):
@@ -544,4 +584,4 @@ class MainWindow(QtWidgets.QMainWindow):
     def logSuccess(self, msg: str):
         self.log({"text": msg, "type": "success"})
 
-    # endregion 
+    # endregion

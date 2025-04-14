@@ -6,23 +6,35 @@ from .signal_bus import signalBus
 
 def create_mesh_item(opts: dict) -> gl.GLMeshItem:
     data = opts.get("meshdata", None)
+    empty = opts.get("empty", False)
     rotation = opts.get("rotation", (0, 0, 0, 0, False))
-    if not isinstance(data, gl.MeshData):
-        raise TypeError("meshdata must be of type MeshData")
+    drawFaces = opts.get("draw_faces", True)
+    drawEdges = opts.get("draw_edges", True)
 
     cc: object | tuple = QColor(opts.get("color", "#B2713D")).getRgbF()
-    mesh_item = gl.GLMeshItem(
-        meshdata=data,
+    angle, x, y, z, local = rotation
+
+    mesh_item:gl.GLMeshItem = gl.GLMeshItem(
         smooth=True,
-        drawFaces=True,
-        drawEdges=False,
+        drawFaces=drawFaces,
+        drawEdges=drawEdges,
         color=(cc[0], cc[1], cc[2], 0.5),
         edgeColor=(cc[0], cc[1], cc[2], 1),
         shader="shaded",
         glOptions="opaque",
     )
-    angle, x, y, z, local = rotation
+
+    # apply the rotation
     mesh_item.rotate(angle, x, y, z, local)  # Rotate to align with the YZ plane
+
+    if empty:
+        return mesh_item
+
+    if not isinstance(data, gl.MeshData):
+        raise TypeError("meshdata must be of type MeshData")
+    
+    # assign the new mesh data
+    mesh_item.setMeshData(meshdata=data)
     return mesh_item
 
 
