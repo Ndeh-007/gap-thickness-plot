@@ -6,3 +6,4 @@ PyOpenGL
 PyOpenGL_accelerate
 Pillow
 h5py
+scipy

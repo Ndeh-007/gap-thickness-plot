@@ -1,10 +1,63 @@
 import os
 import numpy as np
+import scipy.ndimage as snd
 
 from PySide6.QtGui import QColor
 from PIL import Image
 from .variables import FLUIDS
 import h5py
+
+
+def scale_with_pillow(
+    arr: np.ndarray, factor: int | tuple[int, int] = 1, multiplier: int = 1
+) -> np.ndarray:
+    """
+    scales an image using pillow
+    """
+
+    f_x, f_y = 1, 1
+    if isinstance(factor, tuple):
+        f_x, f_y = factor
+
+    if isinstance(factor, int):
+        f_x, f_y = (factor, factor)
+
+    # create the pillow image
+    img = Image.fromarray(arr)
+
+    # scale it
+    size = multiplier * f_x * img.width, multiplier * f_y * img.height
+    s_img = img.resize(size, Image.LANCZOS)
+
+    # resolve it as a np-array
+    return np.array(s_img)
+
+
+def apply_gaussian_filter(
+    arr: np.ndarray, dimensions: list[int], factor: int = 1, multiplier: int = 1
+) -> np.ndarray:
+    """
+    applies a uniform gaussian filter to target slices of array
+
+    dimensions: a list integers of values 0 and 1. 0 for dimensions to be omited during filtration.
+    len(dimensions) == len(arr.shape)
+    """
+    r = factor * multiplier
+
+    # create the filter kernel
+    kernel = []
+    for i in range(len(dimensions)):
+        kernel.append(dimensions[i] * r)
+
+    f_arr = snd.gaussian_filter(arr, sigma=kernel)
+    return f_arr
+
+
+def apply_scaling(arr: np.ndarray, factor: int = 2):
+    _a = (arr * 255).astype(np.uint8)
+    a = scale_with_pillow(_a, 1, factor)
+    b = apply_gaussian_filter(a, [1, 1, 0], 2, factor)
+    return b / 255.0
 
 
 def get_all_file_paths(target_dir: str) -> list[str]:
@@ -108,6 +161,7 @@ def load_frames(file: str) -> dict:
 
     rotate = 1 == 0
     annlus_only = 1 == 1
+    scale = 1 == 1
 
     for j in range(time_step - 1):
         for k in range(n_sections):
@@ -125,7 +179,13 @@ def load_frames(file: str) -> dict:
                 if rotate:
                     w_c_vals = np.rot90(w_c_vals, k=1)  # k=1 => 90° counter-clockwise
                 else:
-                    w_c_vals = np.flip(w_c_vals, axis=1) # for backwards flow
+                    w_c_vals = np.flip(w_c_vals, axis=1)  # for backwards flow
+
+                if scale:
+                    w_c_vals = apply_scaling(w_c_vals, 2)
+
+                n_xi = w_c_vals.shape[0]
+                n_zeta = w_c_vals.shape[1]
 
                 ann_frames.append(w_c_vals)
             else:
@@ -142,11 +202,16 @@ def load_frames(file: str) -> dict:
                     )
                     if rotate:
                         w_c_vals = np.rot90(w_c_vals, k=-1)  # k=-1 => 90° clockwise
+
+                    if scale:
+                        w_c_vals = apply_scaling(w_c_vals, 2)
+
+                    n_xi = w_c_vals.shape[0]
+                    n_zeta = w_c_vals.shape[1]
                     pipe_frames.append(w_c_vals)
 
-
     if annlus_only:
-    # collect all frames
+        # collect all frames
         print(
             "ann_frames.shape",
             ann_frames[0].shape,
@@ -173,7 +238,7 @@ def load_frames(file: str) -> dict:
         "tmd": tmd,
         "bmd": bmd,
         "unit": unit,
-        "nxi": n_zeta if rotate else n_xi,
-        "nzeta": n_xi if rotate else n_zeta,
+        "nxi": n_xi,
+        "nzeta": n_zeta,
         "time_step": time_step,
     }

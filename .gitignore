@@ -166,5 +166,5 @@ SealSolver.jl/
 /SealSolver.jl/
 server/Project.toml
 server/Manifest.toml
-*.npy
-*.h5
+**.npy
+**.h5
