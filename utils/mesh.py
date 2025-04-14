@@ -6,6 +6,7 @@ from .signal_bus import signalBus
 
 def create_mesh_item(opts: dict) -> gl.GLMeshItem:
     data = opts.get("meshdata", None)
+    rotation = opts.get("rotation", (0, 0, 0, 0, False))
     if not isinstance(data, gl.MeshData):
         raise TypeError("meshdata must be of type MeshData")
 
@@ -18,9 +19,10 @@ def create_mesh_item(opts: dict) -> gl.GLMeshItem:
         color=(cc[0], cc[1], cc[2], 0.5),
         edgeColor=(cc[0], cc[1], cc[2], 1),
         shader="shaded",
-        # glOptions="opaque",
+        glOptions="opaque",
     )
-    mesh_item.rotate(180, 0, 1, 0)  # Rotate to align with the YZ plane
+    angle, x, y, z, local = rotation
+    mesh_item.rotate(angle, x, y, z, local)  # Rotate to align with the YZ plane
     return mesh_item
 
 
@@ -188,6 +190,7 @@ def create_depth_vertex_array(opts: dict) -> np.ndarray:
     plane: str = opts.get("plane", "zy")
     size: int = opts.get("size", 1)
     anchor: str = opts.get("anchor", "center")
+    padding: float = opts.get("padding", 0.01)
 
     if not isinstance(thickness_profile, np.ndarray):
         raise TypeError("thickness_profile must be of type np.ndarray")
@@ -204,7 +207,8 @@ def create_depth_vertex_array(opts: dict) -> np.ndarray:
                 -size / 2, size / 2, thickness_profile.shape[0], dtype=float
             )
             depths = np.zeros((thickness_profile.shape[0], 3), dtype=float)
-            depths[:, 1] = -(size / 2 + thickness_profile)
+            depths[:, 0] = padding + thickness_profile
+            depths[:, 1] = -(size / 2 + padding)
             depths[:, 2] = entries
             return depths
 
@@ -213,8 +217,28 @@ def create_depth_vertex_array(opts: dict) -> np.ndarray:
                 -size / 2, size / 2, thickness_profile.shape[0], dtype=float
             )
             depths = np.zeros((thickness_profile.shape[0], 3), dtype=float)
-            depths[:, 1] = size / 2 + thickness_profile
+            depths[:, 0] = padding + thickness_profile
+            depths[:, 1] = size / 2 + padding
             depths[:, 2] = entries
+            return depths
+        
+        elif anchor == "center" and plane == "xy":
+            entries = np.linspace(
+                -size / 2, size / 2, thickness_profile.shape[0], dtype=float
+            )
+            depths = np.zeros((thickness_profile.shape[0], 3), dtype=float)
+            depths[:, 0] = padding + thickness_profile
+            depths[:, 1] = entries
+            depths[:, 2] = -(size / 2 + padding)
+            return depths
+        elif anchor == "center" and plane == "yx":
+            entries = np.linspace(
+                -size / 2, size / 2, thickness_profile.shape[0], dtype=float
+            )
+            depths = np.zeros((thickness_profile.shape[0], 3), dtype=float)
+            depths[:, 0] = padding + thickness_profile
+            depths[:, 1] = entries
+            depths[:, 2] = size / 2 + padding
             return depths
         else:
             raise ValueError(

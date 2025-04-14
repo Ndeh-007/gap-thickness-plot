@@ -4,6 +4,7 @@ import components as comp
 import utils as utils
 import models as models
 import os
+from pathlib import Path
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -22,7 +23,14 @@ class MainWindow(QtWidgets.QMainWindow):
         self.thicknessProfileComboBox = QtWidgets.QComboBox(self)
         self.slabPointsInput = QtWidgets.QLineEdit(self)
         self.baseThicknessInput = QtWidgets.QLineEdit(self)
+        self.dataFileInput = QtWidgets.QLineEdit(self)
+        self.selectBaseFile = QtWidgets.QPushButton("Browse ...", self)
         self.depthDetailLevelComboBox = QtWidgets.QComboBox(self)
+        self.progressBar = QtWidgets.QProgressBar()
+        self.progressBar.setFixedHeight(5)
+        self.progressBar.setRange(0, 0)
+        self.progressBar.setStyleSheet(utils.PROGESS_BAR_STYLE)
+        self.slider = QtWidgets.QSlider(QtCore.Qt.Orientation.Horizontal)
 
         self.actionClear.setData("clear")
         self.actionDraw.setData("draw")
@@ -37,10 +45,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlToolBar = QtWidgets.QToolBar()
 
         layout = QtWidgets.QVBoxLayout()
+        layout.addWidget(self.progressBar)
         layout.addWidget(self.glView)
         layout.addWidget(self.controlToolBar)
+        layout.addWidget(self.slider)
         layout.addWidget(self.console)
-        layout.setStretch(0, 1)
+        layout.setStretch(1, 1)
         layout.setSpacing(0)
         layout.setContentsMargins(0, 0, 0, 0)
 
@@ -59,11 +69,11 @@ class MainWindow(QtWidgets.QMainWindow):
             "tmd": 0.0,
             "bmd": 100.0,
             "images": [],
+            "data_file": os.path.join(os.getcwd(), "data", "results", "csave.h5"),
         }
 
         self.timer = QtCore.QTimer(self)
-        self.timer.timeout.connect(self.draw_frame)
-        self.timer.setInterval(200)
+        self.timer.setInterval(17) # 60 fps
 
         self.manager = utils.ThreadManager()
 
@@ -88,10 +98,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         s1 = QtWidgets.QWidget()
         s2 = QtWidgets.QWidget()
+        s3 = QtWidgets.QWidget()
         s1.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
         )
         s2.setSizePolicy(
+            QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
+        )
+        s3.setSizePolicy(
             QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred
         )
         self.controlToolBar.addWidget(s1)
@@ -104,6 +118,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.controlToolBar.addWidget(QtWidgets.QLabel("Base Thickness: "))
         self.controlToolBar.addWidget(self.baseThicknessInput)
         self.controlToolBar.addWidget(s2)
+        self.controlToolBar.addWidget(QtWidgets.QLabel("h5 File: "))
+        self.controlToolBar.addWidget(self.dataFileInput)
+        self.controlToolBar.addWidget(self.selectBaseFile)
+        self.controlToolBar.addWidget(s3)
         self.controlToolBar.addWidget(QtWidgets.QLabel("Depth Detail Level: "))
         self.controlToolBar.addWidget(self.depthDetailLevelComboBox)
 
@@ -112,6 +130,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.slabPointsInput.setText(str(self.__conf["z_points"]))
         self.baseThicknessInput.setText(str(self.__conf["base_thickness"]))
         self.baseThicknessInput.setPlaceholderText("base thickness")
+        self.dataFileInput.setText(str(self.__conf["data_file"]))
+        self.dataFileInput.setPlaceholderText(".h5 file")
         for k, opts in utils.THICKNESS_PROFILES.items():
             self.thicknessProfileComboBox.addItem(opts["name"], k)
         self.thicknessProfileComboBox.setCurrentIndex(0)
@@ -124,6 +144,15 @@ class MainWindow(QtWidgets.QMainWindow):
         # make console only read only
         self.console.setReadOnly(True)
 
+        # hide the progress bar
+        self.progressBar.hide()
+
+        # process the timer
+        self.timer.timeout.connect(self.__updateSlider)
+
+        # draw and axis item
+        self.__clear() # clear the scene
+
     @utils.errorhandler
     def __configure(self):
         self.controlToolBar.actionTriggered.connect(self.__onToolBarActionTriggered)
@@ -131,12 +160,17 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.slabPointsInput.textChanged.connect(self.__onOptionsChanged)
         self.baseThicknessInput.textChanged.connect(self.__onOptionsChanged)
+        self.dataFileInput.textChanged.connect(self.__onOptionsChanged)
+        self.selectBaseFile.pressed.connect(self.__onSelectFile)
         self.thicknessProfileComboBox.currentIndexChanged.connect(
             self.__onOptionsChanged
         )
         self.depthDetailLevelComboBox.currentIndexChanged.connect(
             self.__onOptionsChanged
         )
+
+        self.slider.valueChanged.connect(self.__onSliderValueChanged)
+
 
     @utils.errorhandler
     def __connectSignals(self):
@@ -149,16 +183,48 @@ class MainWindow(QtWidgets.QMainWindow):
         self.__load()
 
     @utils.errorhandler
+    def __onSliderValueChanged(self, value: int):
+        
+        # get the new frame
+        if value not in range(len(self.__conf["images"])):
+            self.log(f"Slider value: <{value}> out of bounds <0, {len(self.__conf['images']) - 1}>")
+            return
+        
+        self.__conf["frame_index"] = value
+
+        # draw 
+        self.draw_frame()
+
+    @utils.errorhandler
+    def __onSelectFile(self, _=None):
+
+        #  if filter keys are provided
+        f = QtWidgets.QFileDialog.getOpenFileName(parent=self, filter="HDF5 files (*.h5)")[0]
+       
+        # if no file was selected, return nothing
+        if len(f) == 0:
+            return None
+        # set the text
+        self.dataFileInput.setText(f.replace("/", "\\"))
+
+    @utils.errorhandler
     def __onOptionsChanged(self, _=None):
         # update the configuration based on the user input
         self.__conf["thickness_profile"] = self.thicknessProfileComboBox.currentData()
         self.__conf["depth_detail_level"] = self.depthDetailLevelComboBox.currentData()
 
+        # collect the data file
+        h5File = self.dataFileInput.text()
+        if Path.is_file(Path(h5File)) and h5File.endswith(".h5"):
+           self.__conf["data_file"] =  h5File
+        else:
+            self.logError(f"Input File <{h5File}> does not exist or is not a .h5 file")
+
         # collect the nz points
         try:
             self.__conf["z_points"] = int(self.slabPointsInput.text())
         except ValueError:
-            self.logWarning("Invalid number of points.")
+            self.logError("Invalid number of points.")
             self.__conf["z_points"] = 40
             self.slabPointsInput.setText(str(self.__conf["z_points"]))
 
@@ -166,14 +232,13 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             self.__conf["base_thickness"] = float(self.baseThicknessInput.text())
         except ValueError:
-            self.logWarning("Invalid base thickness.")
+            self.logError("Invalid base thickness.")
             self.__conf["base_thickness"] = 0.05
             self.baseThicknessInput.setText(str(self.__conf["base_thickness"]))
 
-        self.logEvent(f"Updated configuration: {self.__conf}")
+        self.logEvent(f"Updated configuration")
 
         # draw the mesh item based on the new configuration
-        self.__reDrawScene()
 
     @utils.errorhandler
     def __onToolBarActionTriggered(self, action: QtGui.QAction):
@@ -198,6 +263,15 @@ class MainWindow(QtWidgets.QMainWindow):
     # endregion
 
     # region action workers
+
+    @utils.errorhandler
+    def __updateSlider(self):
+        "when timer fires, shift the slider on step forward"
+        if self.__conf["frame_index"] is None:
+            return
+        
+        self.slider.setValue(self.__conf["frame_index"] + 1)
+
     @utils.errorhandler
     def __stopAnimation(self):
         # from the loaded images,
@@ -205,6 +279,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.timer.stop()
         self.__conf['frame_index'] = 0
+        self.progressBar.hide()
 
     @utils.errorhandler
     def __animate(self):
@@ -216,6 +291,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.__conf["frame_index"] = 0
         self.timer.start()
+        self.progressBar.show()
 
     def draw_frame(self):
         def task(i: int):
@@ -229,17 +305,23 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.logError(res['error'])
             else:
                 cur_index = res["results"]
+                if cur_index is None:
+                    return
                 
                 if cur_index + 1 == len(self.__conf["images"]):
                     return self.__stopAnimation()
 
-                self.__conf['frame_index'] = cur_index + 1
+                # self.__conf['frame_index'] = cur_index + 1
+
+        def on_started():
+            self.logEvent(f"DRAW_FRAME_{self.__conf['frame_index'] + 1}/{len(self.__conf['images'])}")
 
         thread = models.ThreadModel(
             {
                 "task": task,
                 "params": self.__conf["frame_index"],
                 "on_complete": on_complete,
+                "on_started": on_started,
             },
             f"DRAW_FRAME_{self.__conf['frame_index'] + 1}/{len(self.__conf['images'])}",
         )
@@ -248,7 +330,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     @utils.errorhandler
     def __load(self):
-        file_path = os.path.join(os.getcwd(), "data", "csave.npy")
+        file_path = self.__conf['data_file']
 
         def task(file: str):
 
@@ -267,7 +349,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "text_positions": utils.create_depth_vertex_array(
                     {
                         "thickness_profile": profile,
-                        "plane": "zy",
+                        "plane": "yx",
                         "size": 1,
                         "anchor": "center",
                     }
@@ -281,7 +363,8 @@ class MainWindow(QtWidgets.QMainWindow):
             mesh_item = utils.create_mesh_item(
                 {
                     "meshdata": _res_task["meshdata"][0],
-                    "color": utils.appColors.medium_tint_rbg,
+                    "color": utils.appColors.medium_shade_rbg,
+                    "rotation": (180, 0, 0, 1, False),
                 }
             )
             text_items = utils.create_text_items(props)
@@ -305,17 +388,31 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.__conf["bmd"] = opts["bmd"]
                 self.__conf["unit"] = opts["unit"]
                 self.__conf["meshdata"] = opts["meshdata"]
+                self.__conf["frame_index"] = 0
                 self.__meshItems["depth_labels"] = opts["depth_labels"]
                 self.__meshItems["cell"] = opts["cell"]
 
                 self.__draw()
 
-                self.logEvent(f"Loaded {opts['time_step']} images from {file_path}.")
+                # prime the slide
+                self.slider.setMinimum(0)
+                self.slider.setMaximum(len(opts["meshdata"]) - 1)
+                self.slider.setSingleStep(1)
+                self.slider.setTickPosition(QtWidgets.QSlider.TickPosition.TicksBelow)
+                self.slider.setTickInterval(5)
 
+                self.logSuccess(f"Loaded {opts['time_step']} images from {file_path}.")
+                self.progressBar.hide()
+        
+        def on_started():
+            self.progressBar.show()
+            self.logEvent("Loading data from sources and constructing mesh...")
+        
         thread = models.ThreadModel(
             {
                 "params": file_path,
                 "on_complete": on_complete,
+                "on_started": on_started,
                 "task": task,
             },
             id="LOAD_DATA",
@@ -447,20 +544,4 @@ class MainWindow(QtWidgets.QMainWindow):
     def logSuccess(self, msg: str):
         self.log({"text": msg, "type": "success"})
 
-    # endregion
-
-    # region thread workers
-
-    @utils.errorhandler
-    def __onThreadStarted(self, state):
-        pass
-
-    @utils.errorhandler
-    def __onThreadFinished(self):
-        pass
-
-    @utils.errorhandler
-    def __onThreadFailed(self, error):
-        pass
-
-    # endregion
+    # endregion 

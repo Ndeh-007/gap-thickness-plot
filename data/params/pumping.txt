@@ -1,5 +1,5 @@
 2.5E+03,     1.5E-003,  0.0E+000,  1.0E+000,  0.0E+000 
-5.5E+03,     7.E-003,  0.0E+000,  0.0E+000,  1.0E+000 
+8.5E+03,     7.E-003,  0.0E+000,  0.0E+000,  1.0E+000 
 
 # each line represents flowrate and inflow volume fractions over the past time interval 
 # The first flow rate is valid for t=0 untll the first listed time 

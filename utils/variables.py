@@ -25,7 +25,7 @@ def parabolic(nz: int, base_thickness: float) -> np.ndarray:
 @errorhandler
 def custom_wavy(nz: int, base_thickness: float) -> np.ndarray:
     """Custom wavy thickness profile."""
-    return base_thickness * (1 + 0.2 * np.sin(6 * np.pi * np.linspace(0, 1, nz)))
+    return base_thickness * np.flip(np.square(np.sin(np.linspace(0, np.pi/2, nz))))
 
 
 THICKNESS_PROFILES = {
@@ -104,3 +104,20 @@ FLUIDS = {
         "color": appColors.medium_shade_rbg,
     },
 }
+
+
+PROGESS_BAR_STYLE = """
+
+    QProgressBar {
+        border-width: 1px 0px 0px 0px;
+        border-color: white;
+        border-style: solid;
+        padding: 0px;
+        background: white;
+    }
+
+    QProgressBar::chunk {
+        background-color: orange;
+    }
+
+"""
