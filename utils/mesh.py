@@ -3,17 +3,31 @@ import numpy as np
 from PySide6.QtGui import QColor, QFont
 from .signal_bus import signalBus
 
+def apply_rotations(mesh_item: gl.GLMeshItem, rotations: list[tuple] | tuple):
+    _rotations = []
+    if isinstance(rotations, tuple):
+        assert (len(rotations) == 5)
+        _rotations.append(rotations)
+    
+    if isinstance(rotations, list):
+        _rotations = rotations
+
+    for rot in _rotations:
+        assert (isinstance(rot, tuple))
+        assert (len(rot) == 5)
+
+        angle, x, y, z, local = rot
+        mesh_item.rotate(angle, x, y, z, local)
+        
 
 def create_mesh_item(opts: dict) -> gl.GLMeshItem:
     data = opts.get("meshdata", None)
     empty = opts.get("empty", False)
-    rotation = opts.get("rotation", (0, 0, 0, 0, False))
+    rotations = opts.get("rotations", (0, 0, 0, 0, False))
     drawFaces = opts.get("draw_faces", True)
     drawEdges = opts.get("draw_edges", True)
 
     cc: object | tuple = QColor(opts.get("color", "#B2713D")).getRgbF()
-    angle, x, y, z, local = rotation
-
     mesh_item:gl.GLMeshItem = gl.GLMeshItem(
         smooth=True,
         drawFaces=drawFaces,
@@ -25,9 +39,10 @@ def create_mesh_item(opts: dict) -> gl.GLMeshItem:
     )
 
     # apply the rotation
-    mesh_item.rotate(angle, x, y, z, local)  # Rotate to align with the YZ plane
+      # Rotate to align with the YZ plane
 
     if empty:
+        apply_rotations(mesh_item, rotations)
         return mesh_item
 
     if not isinstance(data, gl.MeshData):
@@ -35,6 +50,7 @@ def create_mesh_item(opts: dict) -> gl.GLMeshItem:
     
     # assign the new mesh data
     mesh_item.setMeshData(meshdata=data)
+    apply_rotations(mesh_item, rotations)
     return mesh_item
 
 

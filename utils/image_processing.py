@@ -164,7 +164,7 @@ def load_frames(file: str) -> dict:
 
     rotate = 1 == 0
     annlus_only = 1 == 1
-    scale = 1 == 1
+    scale = 1 == 0
 
     ts = time_step - 1
     # ts = 1

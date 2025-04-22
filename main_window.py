@@ -74,6 +74,8 @@ class MainWindow(QtWidgets.QMainWindow):
             "data_file": os.path.join(os.getcwd(), "data", "results", "csave.h5"),
             "draw_edges": False,
             "draw_faces": True,
+            "rotations": [],
+            # "rotations": (180, 0, 0, 1, False),
         }
 
         self.timer = QtCore.QTimer(self)
@@ -391,7 +393,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 {
                     "meshdata": _res_task["meshdata"][0],
                     "color": utils.appColors.medium_rbg,
-                    "rotation": (180, 0, 0, 1, False),
+                    "rotations": self.__conf["rotations"],
                     "draw_edges": self.__conf["draw_edges"],
                     "draw_faces": self.__conf["draw_faces"],
                 }
@@ -472,7 +474,7 @@ class MainWindow(QtWidgets.QMainWindow):
             {
                 "empty": True,
                 "color": utils.appColors.medium_shade_rbg,
-                "rotation": (180, 0, 0, 1, False),
+                "rotations": self.__conf["rotations"],
                 "draw_edges": self.__conf["draw_edges"],
                 "draw_faces": self.__conf["draw_faces"],
             }

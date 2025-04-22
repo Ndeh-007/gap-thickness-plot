@@ -26,6 +26,7 @@ def parabolic(nz: int, base_thickness: float) -> np.ndarray:
 def custom_wavy(nz: int, base_thickness: float) -> np.ndarray:
     """Custom wavy thickness profile."""
     return base_thickness * np.flip(np.square(np.sin(np.linspace(0, np.pi/2, nz))))
+    # return base_thickness * np.flip(np.random.uniform(0, 1, nz))
 
 
 THICKNESS_PROFILES = {
